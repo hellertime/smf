@@ -35,7 +35,7 @@ int main(int argc, char **argv, char **env) {
 
     return app.run_deprecated(argc, argv, [&] {
       LOG_INFO("Setting up at_exit hooks");
-      engine().at_exit([&rpc_printer] {
+      engine().at_exit([&rpc_printer, &rpc] {
         if (rpc_printer) {
           LOG_INFO("Stopping rpc_printer");
           return rpc_printer->stop();
@@ -68,6 +68,19 @@ int main(int argc, char **argv, char **env) {
         LOG_INFO("Enabling --print-rpc-stats");
         rpc_printer = std::make_unique<printer_t>(&rpc_stats, mins);
       }
+      if (config["print-rpc-histograms-on-exit"].as<bool>()) {
+        engine().at_exit([&rpc] {
+          LOG_INFO("Writing rpc_server histograms");
+          return rpc
+            .map_reduce(adder<smf::histogram>(),
+                        &smf::rpc_server::copy_histogram)
+            .then([](smf::histogram h) {
+              return smf::histogram_seastar_utils::write_histogram(
+                "server_hdr.txt", std::move(h));
+            });
+        });
+      }
+
 
       LOG_INFO("Setting up at_exit hooks");
       return rpc_stats.start()
