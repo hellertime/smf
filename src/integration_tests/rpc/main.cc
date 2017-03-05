@@ -57,7 +57,7 @@ struct requestor_channel {
     auto req = smf_gen::fbs::rpc::CreateRequest(
       *fbb.get(), fbb->CreateString(kPayloadSonet43ElizabethBarretBowen));
     fbb->Finish(req);
-    client->register_outgoing_filter(smf::zstd_compression_filter(1000));
+    client->register_outgoing_filter<smf::zstd_compression_filter>(1000);
   }
   requestor_channel(const requestor_channel &) = delete;
   requestor_channel(requestor_channel &&o)

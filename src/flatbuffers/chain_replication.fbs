@@ -25,7 +25,7 @@ table tx_fragment {
 /// brief - stores `puts` transactionally
 table tx_put_request {
   topic: string;
-  partition: uint;
+  partition: uint; // xxhash32(topic,key)
   chain: [uint];
   txs: [tx_fragment];
 }
