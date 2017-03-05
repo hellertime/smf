@@ -6,6 +6,7 @@
 
 #include "chain_replication/chain_replication_service.h"
 #include "filesystem/wal.h"
+#include "histogram/histogram_seastar_utils.h"
 #include "platform/log.h"
 #include "rpc/rpc_server.h"
 #include "rpc/rpc_server_stats_printer.h"
