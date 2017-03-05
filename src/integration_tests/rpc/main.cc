@@ -10,10 +10,12 @@
 #include "histogram/histogram_seastar_utils.h"
 #include "platform/log.h"
 #include "rpc/filters/zstd_filter.h"
+#include "rpc/load_gen_client_channel.h"
 #include "rpc/rpc_filter.h"
 #include "rpc/rpc_handle_router.h"
 #include "rpc/rpc_server.h"
 #include "rpc/rpc_server_stats_printer.h"
+
 // templates
 #include "rpc/smf_gen/demo_service.smf.fb.h"
 
@@ -49,32 +51,23 @@ static const char *kPayloadSonet43ElizabethBarretBowen =
   "I shall but love thee better after death.";
 
 
-struct requestor_channel {
-  requestor_channel(const char *ip, uint16_t port)
-    : client(new smf_gen::fbs::rpc::SmfStorageClient(ipv4_addr{ip, port}))
-    , fbb(new flatbuffers::FlatBufferBuilder()) {
-    client->enable_histogram_metrics();
+using load_gen_chan_t =
+  smf::load_gen_client_channel<smf_gen::fbs::rpc::SmfStorageClient>;
+
+struct requestor_channel : load_gen_chan_t {
+  requestor_channel(const char *ip, uint16_t port) : load_gen_chan_t(ip, port) {
     auto req = smf_gen::fbs::rpc::CreateRequest(
       *fbb.get(), fbb->CreateString(kPayloadSonet43ElizabethBarretBowen));
     fbb->Finish(req);
-    client->register_outgoing_filter<smf::zstd_compression_filter>(1000);
   }
-  requestor_channel(const requestor_channel &) = delete;
-  requestor_channel(requestor_channel &&o)
-    : client(std::move(o.client)), fbb(std::move(o.fbb)) {}
-  future<> connect() { return client->connect(); }
-  future<> send_request(size_t reqs) {
-    return do_for_each(boost::counting_iterator<int>(0),
-                       boost::counting_iterator<int>(reqs), [this](int) {
-                         smf::rpc_envelope e(fbb->GetBufferPointer(),
-                                             fbb->GetSize());
-                         return client->Get(std::move(e)).then([](auto t) {
-                           return make_ready_future<>();
-                         });
-                       });
+
+  future<> send_request(uint32_t reqs) {
+    // flatbuffers::FlatBufferBuilder &b = *(fbb.get());
+    // smf::rpc_envelope env(fbb->GetBufferPointer(), fbb->GetSize());
+    return load_gen_chan_t::invoke(
+      reqs, &smf_gen::fbs::rpc::SmfStorageClient::Get,
+      (const char *)fbb->GetBufferPointer(), (size_t)fbb->GetSize());
   }
-  std::unique_ptr<smf_gen::fbs::rpc::SmfStorageClient> client;
-  std::unique_ptr<flatbuffers::FlatBufferBuilder>      fbb;
 };
 
 class rpc_client_wrapper {
