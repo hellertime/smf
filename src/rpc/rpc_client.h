@@ -87,15 +87,17 @@ class rpc_client {
     return nullptr;
   }
 
-  template <typename Function> void register_incoming_filter(Function fn) {
-    in_filters_.push_back(fn);
+ template <typename Function, typename... Args>
+  void register_incoming_filter(Args &&... args) {
+    in_filters_.push_back(Function(std::forward<Args>(args)...));
   }
 
-  template <typename Function> void register_outgoing_filter(Function fn) {
-    out_filters_.push_back(fn);
+  template <typename Function, typename... Args>
+  void register_outgoing_filter(Args &&... args) {
+    out_filters_.push_back(Function(std::forward<Args>(args)...));
   }
 
-  bool is_semaphore_empty() { return limit_.current() == 1; }
+  bool is_semaphore_empty() { return limit_.current() == 0; }
 
   SMF_DISALLOW_COPY_AND_ASSIGN(rpc_client);
 
