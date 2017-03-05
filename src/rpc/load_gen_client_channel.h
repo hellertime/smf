@@ -6,7 +6,7 @@
 #include "rpc/rpc_envelope.h"
 
 namespace smf {
-
+  // TODO(agallego) - this might be final
 
 /// \brief used to send N requests, correctly. one at a time and enqueue
 /// callbacks for read - i.e.: future<> to parse in order
