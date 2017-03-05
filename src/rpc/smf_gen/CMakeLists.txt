@@ -31,4 +31,4 @@ build_flatbuffers(
 add_executable (smf_gen ${SMF_GEN_SOURCES})
 target_link_libraries (smf_gen ${BASE_FLAG} ${SMF_GEN_LIBS})
 add_dependencies(smf_gen smf_gen_demo_types)
-install(TARGETS smfb_gen DESTINATION bin)
+install(TARGETS smf_gen RUNTIME DESTINATION bin)
