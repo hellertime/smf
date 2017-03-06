@@ -6,7 +6,7 @@
 #include "rpc/rpc_envelope.h"
 
 namespace smf {
-  // TODO(agallego) - this might be final
+// TODO(agallego) - this might be final
 
 /// \brief used to send N requests, correctly. one at a time and enqueue
 /// callbacks for read - i.e.: future<> to parse in order
@@ -32,14 +32,21 @@ template <typename Service> struct load_gen_client_channel {
 
   virtual ~load_gen_client_channel() {}
 
+  /// \brief user is epxected to fill up the builder
+  /// \code{.cpp}
+  ///        auto req = smf_gen::fbs::rpc::CreateRequest(
+  ///        *fbb.get(), fbb->CreateString(...));
+  ///        ...
+  ///        fbb->Finish(req);
+  /// \endcode
+  virtual void gen_payload(const boost::program_options::variables_map *) = 0;
+
   virtual histogram *get_histogram() const { return client->get_histogram(); }
 
   virtual future<> connect() { return client->connect(); }
 
   inline future<> invoke(uint32_t reqs,
-                         auto (Service::*func)(smf::rpc_envelope),
-                         const char *    payload,
-                         size_t          payload_size) {
+                         auto (Service::*func)(smf::rpc_envelope)) {
     LOG_THROW_IF(reqs == 0, "bad number of requests");
     LOG_THROW_IF(fbb->GetSize() == 0, "Empty builder, don't forget to build "
                                       "flatbuffers payload. See the "
@@ -48,8 +55,8 @@ template <typename Service> struct load_gen_client_channel {
     return do_for_each(
       boost::counting_iterator<uint32_t>(0),
       boost::counting_iterator<uint32_t>(reqs),
-      [this, func, payload, payload_size](uint32_t i) mutable {
-        smf::rpc_envelope e(payload, payload_size);
+      [this, func](uint32_t i) mutable {
+        smf::rpc_envelope e(fbb->GetBufferPointer(), fbb->GetSize());
         return ((*client).*func)(std::move(e)).then([](auto t) {
           return make_ready_future<>();
         });

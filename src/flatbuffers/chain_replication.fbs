@@ -17,7 +17,7 @@ table tx_fragment {
   op: tx_operation;
   /// sequence id.. not sure if needed
   id: uint;
-  time: ulong;
+  time_micros: ulong;
   key: [ubyte];
   value: [ubyte];
 }

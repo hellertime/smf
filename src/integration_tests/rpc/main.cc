@@ -51,101 +51,17 @@ static const char *kPayloadSonet43ElizabethBarretBowen =
   "I shall but love thee better after death.";
 
 
-using load_gen_chan_t =
-  smf::load_gen_client_channel<smf_gen::fbs::rpc::SmfStorageClient>;
-
-struct requestor_channel : load_gen_chan_t {
-  requestor_channel(const char *ip, uint16_t port) : load_gen_chan_t(ip, port) {
+struct requestor_channel
+  : smf::load_gen_client_channel<smf_gen::fbs::rpc::SmfStorageClient> {
+  virtual void gen_payload() final {
     auto req = smf_gen::fbs::rpc::CreateRequest(
       *fbb.get(), fbb->CreateString(kPayloadSonet43ElizabethBarretBowen));
     fbb->Finish(req);
   }
-
-  future<> send_request(uint32_t reqs) {
-    // flatbuffers::FlatBufferBuilder &b = *(fbb.get());
-    // smf::rpc_envelope env(fbb->GetBufferPointer(), fbb->GetSize());
-    return load_gen_chan_t::invoke(
-      reqs, &smf_gen::fbs::rpc::SmfStorageClient::Get,
-      (const char *)fbb->GetBufferPointer(), (size_t)fbb->GetSize());
-  }
 };
 
 class rpc_client_wrapper {
- public:
-  rpc_client_wrapper(const char *ip,
-                     uint16_t    port,
-                     size_t      num_of_req,
-                     size_t      concurrency)
-    : concurrency_(std::min(num_of_req, concurrency))
-    , num_of_req_(num_of_req)
-    , clients_(concurrency) {
-    DLOG_DEBUG(
-      "Setting up the client. Remove server: {}:{} , reqs:{}, concurrency:{} ",
-      ip, port, num_of_req, concurrency);
 
-    std::generate(clients_.begin(), clients_.end(), [ip, port] {
-      return std::make_unique<requestor_channel>(ip, port);
-    });
-  }
-  future<> connect() {
-    DLOG_DEBUG("Creating connections");
-    return do_for_each(clients_.begin(), clients_.end(),
-                       [](auto &c) { return c->connect(); });
-  }
-
-  future<uint64_t> send_request() {
-    namespace co = std::chrono;
-    auto begin   = co::high_resolution_clock::now();
-    return connect()
-      .then([this] {
-        return do_with(semaphore(concurrency_), [this](auto &limit) {
-          return do_for_each(clients_.begin(), clients_.end(),
-                             [this, &limit](auto &c) {
-                               return limit.wait(1).then([this, &c, &limit] {
-                                 // notice that this does not return, hence
-                                 // executing concurrently
-                                 c->send_request(num_of_req_ / concurrency_)
-                                   .finally([&limit] { limit.signal(1); });
-                               });
-                             })
-            .then([this, &limit] { return limit.wait(concurrency_); });
-        });  // semaphore
-      })
-      .then([begin, this] {
-        auto     end_t = co::high_resolution_clock::now();
-        uint64_t duration_milli =
-          co::duration_cast<co::milliseconds>(end_t - begin).count();
-        auto qps = static_cast<double>(num_of_req_)
-                   / static_cast<double>(std::max(duration_milli, uint64_t(1)));
-        DLOG_DEBUG("Test took: {}ms", duration_milli);
-        DLOG_DEBUG("Queries per millisecond: {}/ms", qps);
-        return make_ready_future<uint64_t>(duration_milli);
-      });  // connect
-  }
-
-  future<smf::histogram> all_histograms() {
-    smf::histogram h;
-    for (auto &ch : clients_) {
-      h += *ch->client->get_histogram();
-    }
-    return make_ready_future<smf::histogram>(std::move(h));
-  }
-
-
-  future<> stop() { return make_ready_future<>(); }
-
- private:
-  const size_t concurrency_;
-  const size_t num_of_req_;
-  // You can only have one client per active stream
-  // the problem comes when you try to read, 2 function calls to read, even
-  // read_exactly might interpolate
-  // which yields incorrect results for test. That use case has to be manually
-  // optimized and don't expect it to be the main use case
-  // In effect, you need a socket per concurrency item in the command line
-  // flags
-  //
-  std::vector<std::unique_ptr<requestor_channel>> clients_{};
 };
 
 
