@@ -13,14 +13,15 @@ namespace load_gen {
 
 
 template <typename Service> struct load_gen_args {
-  using client_t = std::unique_ptr<load_gen_client_channel<Service>>;
+  using client_t  = std::unique_ptr<load_gen_client_channel<Service>>;
+  auto callback_t = std::function<auto(rpc_client *)>;
 
   load_gen_args(const char *                                 _ip,
                 uint16_t                                     _port,
                 size_t                                       _num_of_req,
                 size_t                                       _concurrency,
                 const boost::program_options::variables_map *_cfg,
-                auto (Service::*_func)(smf::rpc_envelope))
+                callback_t _func
     : ip(_ip)
     , port(_port)
     , num_of_req(_num_of_req)
@@ -42,8 +43,8 @@ template <typename Service> struct load_gen_args {
   size_t      concurrency;
 
   const boost::program_options::variables_map *cfg;
-
-  decltype(std::mem_fn(auto (Service::*func)(smf::rpc_envelope))) fn;
+                // this needs to be generated
+                FN fn;
 
   // You can only have one client per active stream
   // the problem comes when you try to read, 2 function calls to read, even

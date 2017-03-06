@@ -7,9 +7,9 @@
 #include "chain_replication/chain_replication_service.h"
 
 #include "hashing/hashing_utils.h"
-#include "rpc/load_gen/rpc_load_gen.h"
-#include "rpc/load_gen/rpc_load_gen_args.h"
-#include "rpc/load_gen/rpc_load_gen_stats.h"
+#include "rpc/load_gen/load_gen.h"
+#include "rpc/load_gen/load_gen_args.h"
+#include "rpc/load_gen/load_gen_stats.h"
 #include "utils/random.h"
 
 using client_t = smf::chains::chain_replication_client;
