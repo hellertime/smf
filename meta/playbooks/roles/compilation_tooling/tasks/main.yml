@@ -35,4 +35,7 @@
     - clang
     - doxygen
     - libgtest-dev
+    - autoconf
+    - automake
+    - libtool
   when: ansible_os_family == "Debian"
