@@ -28,16 +28,20 @@
 // at 2 will cover this. Going larger doesn't improve the accuracy of this test.
 constexpr static const size_t kMaxClients = 2;
 
+static inline
+std::string ipv4_addr_to_ip_str(seastar::ipv4_addr addr) {
+    std::stringstream addr_;
+    addr_ << addr;
+    std::string ip = addr_.str().substr(0, addr_.str().find(":"));
+    return std::move(ip);
+}
+
 struct client_info {
     explicit client_info(seastar::ipv4_addr ip): client(smf_gen::demo::SmfStorageClient::make_shared(ip)), ip(ip.ip) {};
-    client_info(client_info &&o) noexcept
-        : client(std::move(o.client)), ip(o.ip) {
-            std::move(std::begin(o.ip_str), std::end(o.ip_str), &o.ip_str[0]); // can't move static array, copy
-        };
+    client_info(client_info &&o) noexcept : client(std::move(o.client)), ip(o.ip) {};
     ~client_info(){};
     seastar::shared_ptr<smf_gen::demo::SmfStorageClient> client = nullptr;
     uint32_t ip = 0;
-    char ip_str[INET_ADDRSTRLEN]{};
     SMF_DISALLOW_COPY_AND_ASSIGN(client_info);
 };
 
@@ -58,8 +62,7 @@ public:
             auto sa_in = reinterpret_cast<struct sockaddr_in*>(ifa->ifa_addr);
             auto ip = ntohl(sa_in->sin_addr.s_addr);
             clients_.push_back(client_info(seastar::make_ipv4_address(ip, port)));
-            THROW_IFNULL(inet_ntop(AF_INET, &sa_in->sin_addr, clients_[i].ip_str, INET_ADDRSTRLEN));
-            DLOG_DEBUG("Added client ip {}", clients_[i].ip_str);
+            DLOG_DEBUG("Added client {}", clients_[i].client->server_addr);
         }
     }
 
@@ -79,12 +82,10 @@ private:
 class storage_service : public smf_gen::demo::SmfStorage {
   virtual seastar::future<smf::rpc_typed_envelope<smf_gen::demo::Response>>
   Get(smf::rpc_recv_typed_context<smf_gen::demo::Request> &&rec) final {
-    char address_str[INET_ADDRSTRLEN] = {};
     smf::rpc_typed_envelope<smf_gen::demo::Response> data;
     if (rec) {
         DLOG_DEBUG("Got request name {}", rec->name()->str());
-        inet_ntop(AF_INET, &rec.ctx->remote_address.as_posix_sockaddr_in().sin_addr, address_str, INET_ADDRSTRLEN);
-        data.data->name = seastar::to_sstring(address_str);
+        data.data->name = ipv4_addr_to_ip_str(rec.ctx->remote_address);
     }
     data.envelope.set_status(200);
     return seastar::make_ready_future<
@@ -129,15 +130,17 @@ main(int args, char **argv, char **env) {
             DLOG_DEBUG("Connecting client to {}", client.client->server_addr);
             return client.client->connect()
             .then([&client] {
-              DLOG_DEBUG("Connected to {}", client.ip_str);
+              DLOG_DEBUG("Connected to {}", client.client->server_addr);
               smf::rpc_typed_envelope<smf_gen::demo::Request> req;
-              req.data->name = seastar::sstring(client.ip_str, INET_ADDRSTRLEN);
+              std::stringstream addr;
+              addr << client.client->server_addr;
+              req.data->name = std::move(addr.str());
               return client.client->Get(req.serialize_data());
             })
             .then([&client] (auto reply) {
               DLOG_DEBUG("Got reply {}", reply->name()->str());
-              if (reply->name()->str() != client.ip_str) {
-                  LOG_THROW("Server did not see our IP {} != {}", reply->name()->str(), client.ip_str);
+              if (reply->name()->str() != ipv4_addr_to_ip_str(client.client->server_addr)) {
+                  LOG_THROW("Server did not see our IP {} != {}", reply->name()->str(), client.client->server_addr);
               }
               return seastar::make_ready_future<>();
             })
